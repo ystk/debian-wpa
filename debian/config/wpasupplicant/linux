@@ -152,7 +152,7 @@ CONFIG_EAP_TTLS=y
 # functionality needed for EAP-FAST. If EAP-FAST is enabled with OpenSSL,
 # the OpenSSL library must be patched (openssl-0.9.8d-tls-extensions.patch)
 # to add the needed functions.
-#CONFIG_EAP_FAST=y
+CONFIG_EAP_FAST=y
 
 # EAP-GTC
 CONFIG_EAP_GTC=y
@@ -468,3 +468,13 @@ CONFIG_INTERWORKING=y
 
 # XXX: Debian #650834
 CONFIG_BGSCAN_SIMPLE=y
+
+# XXX: Debian #678147
+CONFIG_IBSS_RSN=y
+
+# XXX: Wi-Fi P2P support
+CONFIG_P2P=y
+
+# XXX: Debian #690536
+CONFIG_AP=y
+

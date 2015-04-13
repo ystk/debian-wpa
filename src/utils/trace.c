@@ -2,14 +2,8 @@
  * Backtrace debugging
  * Copyright (c) 2009, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -24,11 +18,9 @@ static struct dl_list active_references =
 
 #ifdef WPA_TRACE_BFD
 #include <bfd.h>
-#ifdef __linux__
-#include <demangle.h>
-#else /* __linux__ */
-#include <libiberty/demangle.h>
-#endif /* __linux__ */
+
+#define DMGL_PARAMS      (1 << 0)
+#define DMGL_ANSI        (1 << 1)
 
 static char *prg_fname = NULL;
 static bfd *cached_abfd = NULL;
@@ -193,6 +185,7 @@ static void wpa_trace_bfd_addr(void *pc)
 		wpa_printf(MSG_INFO, "     %s() %s:%u",
 			   name, filename, data.line);
 		free(aname);
+		aname = NULL;
 
 		data.found = bfd_find_inliner_info(abfd, &data.filename,
 						   &data.function, &data.line);

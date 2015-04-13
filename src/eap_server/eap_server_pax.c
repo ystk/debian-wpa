@@ -2,14 +2,8 @@
  * hostapd / EAP-PAX (RFC 4746) server
  * Copyright (c) 2005-2007, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -70,7 +64,7 @@ static void eap_pax_reset(struct eap_sm *sm, void *priv)
 {
 	struct eap_pax_data *data = priv;
 	os_free(data->cid);
-	os_free(data);
+	bin_clear_free(data, sizeof(*data));
 }
 
 
@@ -274,7 +268,7 @@ static Boolean eap_pax_check(struct eap_sm *sm, void *priv,
 			    wpabuf_mhead(respData),
 			    wpabuf_len(respData) - EAP_PAX_ICV_LEN,
 			    NULL, 0, NULL, 0, icvbuf);
-		if (os_memcmp(icvbuf, icv, EAP_PAX_ICV_LEN) != 0) {
+		if (os_memcmp_const(icvbuf, icv, EAP_PAX_ICV_LEN) != 0) {
 			wpa_printf(MSG_INFO, "EAP-PAX: Invalid ICV");
 			wpa_hexdump(MSG_MSGDUMP, "EAP-PAX: Expected ICV",
 				    icvbuf, EAP_PAX_ICV_LEN);
@@ -293,7 +287,7 @@ static void eap_pax_process_std_2(struct eap_sm *sm,
 	struct eap_pax_hdr *resp;
 	u8 mac[EAP_PAX_MAC_LEN], icvbuf[EAP_PAX_ICV_LEN];
 	const u8 *pos;
-	size_t len, left;
+	size_t len, left, cid_len;
 	int i;
 
 	if (data->state != PAX_STD_1)
@@ -326,7 +320,12 @@ static void eap_pax_process_std_2(struct eap_sm *sm,
 		wpa_printf(MSG_INFO, "EAP-PAX: Too short PAX_STD-2 (CID)");
 		return;
 	}
-	data->cid_len = WPA_GET_BE16(pos);
+	cid_len = WPA_GET_BE16(pos);
+	if (cid_len > 1500) {
+		wpa_printf(MSG_INFO, "EAP-PAX: Too long CID");
+		return;
+	}
+	data->cid_len = cid_len;
 	os_free(data->cid);
 	data->cid = os_malloc(data->cid_len);
 	if (data->cid == NULL) {
@@ -401,7 +400,7 @@ static void eap_pax_process_std_2(struct eap_sm *sm,
 		    data->rand.r.x, EAP_PAX_RAND_LEN,
 		    data->rand.r.y, EAP_PAX_RAND_LEN,
 		    (u8 *) data->cid, data->cid_len, mac);
-	if (os_memcmp(mac, pos, EAP_PAX_MAC_LEN) != 0) {
+	if (os_memcmp_const(mac, pos, EAP_PAX_MAC_LEN) != 0) {
 		wpa_printf(MSG_INFO, "EAP-PAX: Invalid MAC_CK(A, B, CID) in "
 			   "PAX_STD-2");
 		wpa_hexdump(MSG_MSGDUMP, "EAP-PAX: Expected MAC_CK(A, B, CID)",
@@ -423,7 +422,7 @@ static void eap_pax_process_std_2(struct eap_sm *sm,
 		    wpabuf_head(respData),
 		    wpabuf_len(respData) - EAP_PAX_ICV_LEN, NULL, 0, NULL, 0,
 		    icvbuf);
-	if (os_memcmp(icvbuf, pos, EAP_PAX_ICV_LEN) != 0) {
+	if (os_memcmp_const(icvbuf, pos, EAP_PAX_ICV_LEN) != 0) {
 		wpa_printf(MSG_INFO, "EAP-PAX: Invalid ICV in PAX_STD-2");
 		wpa_hexdump(MSG_MSGDUMP, "EAP-PAX: Expected ICV",
 			    icvbuf, EAP_PAX_ICV_LEN);

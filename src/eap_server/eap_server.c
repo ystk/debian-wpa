@@ -2,14 +2,8 @@
  * hostapd / EAP Full Authenticator state machine (RFC 4137)
  * Copyright (c) 2004-2007, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  *
  * This state machine is based on the full authenticator state machine defined
  * in RFC 4137. However, to support backend authentication in RADIUS
@@ -125,6 +119,32 @@ int eap_user_get(struct eap_sm *sm, const u8 *identity, size_t identity_len,
 }
 
 
+void eap_log_msg(struct eap_sm *sm, const char *fmt, ...)
+{
+	va_list ap;
+	char *buf;
+	int buflen;
+
+	if (sm == NULL || sm->eapol_cb == NULL || sm->eapol_cb->log_msg == NULL)
+		return;
+
+	va_start(ap, fmt);
+	buflen = vsnprintf(NULL, 0, fmt, ap) + 1;
+	va_end(ap);
+
+	buf = os_malloc(buflen);
+	if (buf == NULL)
+		return;
+	va_start(ap, fmt);
+	vsnprintf(buf, buflen, fmt, ap);
+	va_end(ap);
+
+	sm->eapol_cb->log_msg(sm->eapol_ctx, buf);
+
+	os_free(buf);
+}
+
+
 SM_STATE(EAP, DISABLED)
 {
 	SM_ENTRY(EAP, DISABLED);
@@ -148,7 +168,7 @@ SM_STATE(EAP, INITIALIZE)
 	sm->eap_if.eapSuccess = FALSE;
 	sm->eap_if.eapFail = FALSE;
 	sm->eap_if.eapTimeout = FALSE;
-	os_free(sm->eap_if.eapKeyData);
+	bin_clear_free(sm->eap_if.eapKeyData, sm->eap_if.eapKeyDataLen);
 	sm->eap_if.eapKeyData = NULL;
 	sm->eap_if.eapKeyDataLen = 0;
 	sm->eap_if.eapKeyAvailable = FALSE;
@@ -281,6 +301,11 @@ SM_STATE(EAP, INTEGRITY_CHECK)
 {
 	SM_ENTRY(EAP, INTEGRITY_CHECK);
 
+	if (!eap_hdr_len_valid(sm->eap_if.eapRespData, 1)) {
+		sm->ignore = TRUE;
+		return;
+	}
+
 	if (sm->m->check) {
 		sm->ignore = sm->m->check(sm, sm->eap_method_priv,
 					  sm->eap_if.eapRespData);
@@ -315,10 +340,13 @@ SM_STATE(EAP, METHOD_RESPONSE)
 {
 	SM_ENTRY(EAP, METHOD_RESPONSE);
 
+	if (!eap_hdr_len_valid(sm->eap_if.eapRespData, 1))
+		return;
+
 	sm->m->process(sm, sm->eap_method_priv, sm->eap_if.eapRespData);
 	if (sm->m->isDone(sm, sm->eap_method_priv)) {
 		eap_sm_Policy_update(sm, NULL, 0);
-		os_free(sm->eap_if.eapKeyData);
+		bin_clear_free(sm->eap_if.eapKeyData, sm->eap_if.eapKeyDataLen);
 		if (sm->m->getKey) {
 			sm->eap_if.eapKeyData = sm->m->getKey(
 				sm, sm->eap_method_priv,
@@ -341,6 +369,7 @@ SM_STATE(EAP, PROPOSE_METHOD)
 
 	SM_ENTRY(EAP, PROPOSE_METHOD);
 
+try_another_method:
 	type = eap_sm_Policy_getNextMethod(sm, &vendor);
 	if (vendor == EAP_VENDOR_IETF)
 		sm->currentMethod = type;
@@ -358,7 +387,14 @@ SM_STATE(EAP, PROPOSE_METHOD)
 				   "method %d", sm->currentMethod);
 			sm->m = NULL;
 			sm->currentMethod = EAP_TYPE_NONE;
+			goto try_another_method;
 		}
+	}
+	if (sm->m == NULL) {
+		wpa_printf(MSG_DEBUG, "EAP: Could not find suitable EAP method");
+		eap_log_msg(sm, "Could not find suitable EAP method");
+		sm->decision = DECISION_FAILURE;
+		return;
 	}
 	if (sm->currentMethod == EAP_TYPE_IDENTITY ||
 	    sm->currentMethod == EAP_TYPE_NOTIFICATION)
@@ -368,6 +404,8 @@ SM_STATE(EAP, PROPOSE_METHOD)
 
 	wpa_msg(sm->msg_ctx, MSG_INFO, WPA_EVENT_EAP_PROPOSED_METHOD
 		"vendor=%u method=%u", vendor, sm->currentMethod);
+	eap_log_msg(sm, "Propose EAP method vendor=%u method=%u",
+		    vendor, sm->currentMethod);
 }
 
 
@@ -385,6 +423,9 @@ SM_STATE(EAP, NAK)
 		sm->eap_method_priv = NULL;
 	}
 	sm->m = NULL;
+
+	if (!eap_hdr_len_valid(sm->eap_if.eapRespData, 1))
+		return;
 
 	nak = wpabuf_head(sm->eap_if.eapRespData);
 	if (nak && wpabuf_len(sm->eap_if.eapRespData) > sizeof(*nak)) {
@@ -591,7 +632,7 @@ SM_STATE(EAP, SUCCESS2)
 	if (sm->eap_if.aaaEapKeyAvailable) {
 		EAP_COPY(&sm->eap_if.eapKeyData, sm->eap_if.aaaEapKeyData);
 	} else {
-		os_free(sm->eap_if.eapKeyData);
+		bin_clear_free(sm->eap_if.eapKeyData, sm->eap_if.eapKeyDataLen);
 		sm->eap_if.eapKeyData = NULL;
 		sm->eap_if.eapKeyDataLen = 0;
 	}
@@ -681,6 +722,7 @@ SM_STEP(EAP)
 				   "respMethod=%d currentMethod=%d",
 				   sm->rxResp, sm->respId, sm->currentId,
 				   sm->respMethod, sm->currentMethod);
+			eap_log_msg(sm, "Discard received EAP message");
 			SM_ENTER(EAP, DISCARD);
 		}
 		break;
@@ -697,6 +739,15 @@ SM_STEP(EAP)
 			SM_ENTER(EAP, METHOD_RESPONSE);
 		break;
 	case EAP_METHOD_REQUEST:
+		if (sm->m == NULL) {
+			/*
+			 * This transition is not mentioned in RFC 4137, but it
+			 * is needed to handle cleanly a case where EAP method
+			 * initialization fails.
+			 */
+			SM_ENTER(EAP, FAILURE);
+			break;
+		}
 		SM_ENTER(EAP, SEND_REQUEST);
 		break;
 	case EAP_METHOD_RESPONSE:
@@ -1209,7 +1260,7 @@ static void eap_user_free(struct eap_user *user)
 {
 	if (user == NULL)
 		return;
-	os_free(user->password);
+	bin_clear_free(user->password, user->password_len);
 	user->password = NULL;
 	os_free(user);
 }
@@ -1273,6 +1324,12 @@ struct eap_sm * eap_server_sm_init(void *eapol_ctx,
 	sm->fragment_size = conf->fragment_size;
 	sm->pwd_group = conf->pwd_group;
 	sm->pbc_in_m1 = conf->pbc_in_m1;
+	sm->server_id = conf->server_id;
+	sm->server_id_len = conf->server_id_len;
+
+#ifdef CONFIG_TESTING_OPTIONS
+	sm->tls_test_flags = conf->tls_test_flags;
+#endif /* CONFIG_TESTING_OPTIONS */
 
 	wpa_printf(MSG_DEBUG, "EAP: Server state machine created");
 
@@ -1295,7 +1352,7 @@ void eap_server_sm_deinit(struct eap_sm *sm)
 	if (sm->m && sm->eap_method_priv)
 		sm->m->reset(sm, sm->eap_method_priv);
 	wpabuf_free(sm->eap_if.eapReqData);
-	os_free(sm->eap_if.eapKeyData);
+	bin_clear_free(sm->eap_if.eapKeyData, sm->eap_if.eapKeyDataLen);
 	wpabuf_free(sm->lastReqData);
 	wpabuf_free(sm->eap_if.eapRespData);
 	os_free(sm->identity);
@@ -1304,7 +1361,7 @@ void eap_server_sm_deinit(struct eap_sm *sm)
 	os_free(sm->eap_fast_a_id_info);
 	wpabuf_free(sm->eap_if.aaaEapReqData);
 	wpabuf_free(sm->eap_if.aaaEapRespData);
-	os_free(sm->eap_if.aaaEapKeyData);
+	bin_clear_free(sm->eap_if.aaaEapKeyData, sm->eap_if.aaaEapKeyDataLen);
 	eap_user_free(sm->user);
 	wpabuf_free(sm->assoc_wps_ie);
 	wpabuf_free(sm->assoc_p2p_ie);

@@ -2,14 +2,8 @@
  * Driver interaction with generic Linux Wireless Extensions
  * Copyright (c) 2003-2010, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  *
  * This file implements a driver interface for the Linux Wireless Extensions.
  * When used with WE-18 or newer, this interface can be used as-is with number
@@ -25,7 +19,7 @@
 #include <fcntl.h>
 #include <net/if_arp.h>
 
-#include "wireless_copy.h"
+#include "linux_wext.h"
 #include "common.h"
 #include "eloop.h"
 #include "common/ieee802_11_defs.h"
@@ -36,7 +30,6 @@
 #include "rfkill.h"
 #include "driver.h"
 #include "driver_wext.h"
-
 
 static int wpa_driver_wext_flush_pmkid(void *priv);
 static int wpa_driver_wext_get_range(void *priv);
@@ -497,11 +490,9 @@ static void wpa_driver_wext_event_wireless(struct wpa_driver_wext_data *drv,
 					   "IWEVCUSTOM length");
 				return;
 			}
-			buf = os_malloc(iwe->u.data.length + 1);
+			buf = dup_binstr(custom, iwe->u.data.length);
 			if (buf == NULL)
 				return;
-			os_memcpy(buf, custom, iwe->u.data.length);
-			buf[iwe->u.data.length] = '\0';
 			wpa_driver_wext_event_wireless_custom(drv->ctx, buf);
 			os_free(buf);
 			break;
@@ -1403,8 +1394,8 @@ static void wpa_driver_wext_add_scan_entry(struct wpa_scan_results *res,
 	if (data->ie)
 		os_memcpy(pos, data->ie, data->ie_len);
 
-	tmp = os_realloc(res->res,
-			 (res->num + 1) * sizeof(struct wpa_scan_res *));
+	tmp = os_realloc_array(res->res, res->num + 1,
+			       sizeof(struct wpa_scan_res *));
 	if (tmp == NULL) {
 		os_free(r);
 		return;
@@ -1564,6 +1555,7 @@ static int wpa_driver_wext_get_range(void *priv)
 		}
 		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_WEP40 |
 			WPA_DRIVER_CAPA_ENC_WEP104;
+		drv->capa.enc |= WPA_DRIVER_CAPA_ENC_WEP128;
 		if (range->enc_capa & IW_ENC_CAPA_CIPHER_TKIP)
 			drv->capa.enc |= WPA_DRIVER_CAPA_ENC_TKIP;
 		if (range->enc_capa & IW_ENC_CAPA_CIPHER_CCMP)
@@ -1859,10 +1851,8 @@ static void wpa_driver_wext_disconnect(struct wpa_driver_wext_data *drv)
 {
 	struct iwreq iwr;
 	const u8 null_bssid[ETH_ALEN] = { 0, 0, 0, 0, 0, 0 };
-#ifndef ANDROID
 	u8 ssid[32];
 	int i;
-#endif /* ANDROID */
 
 	/*
 	 * Only force-disconnect when the card is in infrastructure mode,
@@ -1883,7 +1873,6 @@ static void wpa_driver_wext_disconnect(struct wpa_driver_wext_data *drv)
 				   "selection on disconnect");
 		}
 
-#ifndef ANDROID
 		if (drv->cfg80211) {
 			/*
 			 * cfg80211 supports SIOCSIWMLME commands, so there is
@@ -1909,7 +1898,6 @@ static void wpa_driver_wext_disconnect(struct wpa_driver_wext_data *drv)
 			wpa_printf(MSG_DEBUG, "WEXT: Failed to set bogus "
 				   "SSID to disconnect");
 		}
-#endif /* ANDROID */
 	}
 }
 
@@ -1921,18 +1909,6 @@ static int wpa_driver_wext_deauthenticate(void *priv, const u8 *addr,
 	int ret;
 	wpa_printf(MSG_DEBUG, "%s", __FUNCTION__);
 	ret = wpa_driver_wext_mlme(drv, addr, IW_MLME_DEAUTH, reason_code);
-	wpa_driver_wext_disconnect(drv);
-	return ret;
-}
-
-
-static int wpa_driver_wext_disassociate(void *priv, const u8 *addr,
-					int reason_code)
-{
-	struct wpa_driver_wext_data *drv = priv;
-	int ret;
-	wpa_printf(MSG_DEBUG, "%s", __FUNCTION__);
-	ret = wpa_driver_wext_mlme(drv, addr, IW_MLME_DISASSOC, reason_code);
 	wpa_driver_wext_disconnect(drv);
 	return ret;
 }
@@ -1962,15 +1938,15 @@ static int wpa_driver_wext_set_gen_ie(void *priv, const u8 *ie,
 int wpa_driver_wext_cipher2wext(int cipher)
 {
 	switch (cipher) {
-	case CIPHER_NONE:
+	case WPA_CIPHER_NONE:
 		return IW_AUTH_CIPHER_NONE;
-	case CIPHER_WEP40:
+	case WPA_CIPHER_WEP40:
 		return IW_AUTH_CIPHER_WEP40;
-	case CIPHER_TKIP:
+	case WPA_CIPHER_TKIP:
 		return IW_AUTH_CIPHER_TKIP;
-	case CIPHER_CCMP:
+	case WPA_CIPHER_CCMP:
 		return IW_AUTH_CIPHER_CCMP;
-	case CIPHER_WEP104:
+	case WPA_CIPHER_WEP104:
 		return IW_AUTH_CIPHER_WEP104;
 	default:
 		return 0;
@@ -1981,10 +1957,10 @@ int wpa_driver_wext_cipher2wext(int cipher)
 int wpa_driver_wext_keymgmt2wext(int keymgmt)
 {
 	switch (keymgmt) {
-	case KEY_MGMT_802_1X:
-	case KEY_MGMT_802_1X_NO_WPA:
+	case WPA_KEY_MGMT_IEEE8021X:
+	case WPA_KEY_MGMT_IEEE8021X_NO_WPA:
 		return IW_AUTH_KEY_MGMT_802_1X;
-	case KEY_MGMT_PSK:
+	case WPA_KEY_MGMT_PSK:
 		return IW_AUTH_KEY_MGMT_PSK;
 	default:
 		return 0;
@@ -2051,7 +2027,11 @@ int wpa_driver_wext_associate(void *priv,
 		 * Stop cfg80211 from trying to associate before we are done
 		 * with all parameters.
 		 */
-		wpa_driver_wext_set_ssid(drv, (u8 *) "", 0);
+		if (wpa_driver_wext_set_ssid(drv, (u8 *) "", 0) < 0) {
+			wpa_printf(MSG_DEBUG,
+				   "WEXT: Failed to clear SSID to stop pending cfg80211 association attempts (if any)");
+			/* continue anyway */
+		}
 	}
 
 	if (wpa_driver_wext_set_drop_unencrypted(drv, params->drop_unencrypted)
@@ -2101,9 +2081,9 @@ int wpa_driver_wext_associate(void *priv,
 	if (wpa_driver_wext_set_auth_param(drv,
 					   IW_AUTH_KEY_MGMT, value) < 0)
 		ret = -1;
-	value = params->key_mgmt_suite != KEY_MGMT_NONE ||
-		params->pairwise_suite != CIPHER_NONE ||
-		params->group_suite != CIPHER_NONE ||
+	value = params->key_mgmt_suite != WPA_KEY_MGMT_NONE ||
+		params->pairwise_suite != WPA_CIPHER_NONE ||
+		params->group_suite != WPA_CIPHER_NONE ||
 		params->wpa_ie_len;
 	if (wpa_driver_wext_set_auth_param(drv,
 					   IW_AUTH_PRIVACY_INVOKED, value) < 0)
@@ -2112,8 +2092,8 @@ int wpa_driver_wext_associate(void *priv,
 	/* Allow unencrypted EAPOL messages even if pairwise keys are set when
 	 * not using WPA. IEEE 802.1X specifies that these frames are not
 	 * encrypted, but WPA encrypts them when pairwise keys are in use. */
-	if (params->key_mgmt_suite == KEY_MGMT_802_1X ||
-	    params->key_mgmt_suite == KEY_MGMT_PSK)
+	if (params->key_mgmt_suite == WPA_KEY_MGMT_IEEE8021X ||
+	    params->key_mgmt_suite == WPA_KEY_MGMT_PSK)
 		allow_unencrypted_eapol = 0;
 	else
 		allow_unencrypted_eapol = 1;
@@ -2139,7 +2119,8 @@ int wpa_driver_wext_associate(void *priv,
 	if (wpa_driver_wext_set_auth_param(drv, IW_AUTH_MFP, value) < 0)
 		ret = -1;
 #endif /* CONFIG_IEEE80211W */
-	if (params->freq && wpa_driver_wext_set_freq(drv, params->freq) < 0)
+	if (params->freq.freq &&
+	    wpa_driver_wext_set_freq(drv, params->freq.freq) < 0)
 		ret = -1;
 	if (!drv->cfg80211 &&
 	    wpa_driver_wext_set_ssid(drv, params->ssid, params->ssid_len) < 0)
@@ -2340,6 +2321,37 @@ static const char * wext_get_radio_name(void *priv)
 }
 
 
+static int wpa_driver_wext_signal_poll(void *priv, struct wpa_signal_info *si)
+{
+	struct wpa_driver_wext_data *drv = priv;
+	struct iw_statistics stats;
+	struct iwreq iwr;
+
+	os_memset(si, 0, sizeof(*si));
+	si->current_signal = -9999;
+	si->current_noise = 9999;
+	si->chanwidth = CHAN_WIDTH_UNKNOWN;
+
+	os_memset(&iwr, 0, sizeof(iwr));
+	os_strlcpy(iwr.ifr_name, drv->ifname, IFNAMSIZ);
+	iwr.u.data.pointer = (caddr_t) &stats;
+	iwr.u.data.length = sizeof(stats);
+	iwr.u.data.flags = 1;
+
+	if (ioctl(drv->ioctl_sock, SIOCGIWSTATS, &iwr) < 0) {
+		wpa_printf(MSG_ERROR, "WEXT: SIOCGIWSTATS: %s",
+			   strerror(errno));
+		return -1;
+	}
+
+	si->current_signal = stats.qual.level -
+		((stats.qual.updated & IW_QUAL_DBM) ? 0x100 : 0);
+	si->current_noise = stats.qual.noise -
+		((stats.qual.updated & IW_QUAL_DBM) ? 0x100 : 0);
+	return 0;
+}
+
+
 const struct wpa_driver_ops wpa_driver_wext_ops = {
 	.name = "wext",
 	.desc = "Linux wireless extensions (generic)",
@@ -2350,7 +2362,6 @@ const struct wpa_driver_ops wpa_driver_wext_ops = {
 	.scan2 = wpa_driver_wext_scan,
 	.get_scan_results2 = wpa_driver_wext_get_scan_results,
 	.deauthenticate = wpa_driver_wext_deauthenticate,
-	.disassociate = wpa_driver_wext_disassociate,
 	.associate = wpa_driver_wext_associate,
 	.init = wpa_driver_wext_init,
 	.deinit = wpa_driver_wext_deinit,
@@ -2360,4 +2371,5 @@ const struct wpa_driver_ops wpa_driver_wext_ops = {
 	.get_capa = wpa_driver_wext_get_capa,
 	.set_operstate = wpa_driver_wext_set_operstate,
 	.get_radio_name = wext_get_radio_name,
+	.signal_poll = wpa_driver_wext_signal_poll,
 };

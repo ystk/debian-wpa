@@ -2,14 +2,8 @@
  * hostapd / EAP Full Authenticator state machine (RFC 4137)
  * Copyright (c) 2004-2007, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef EAP_H
@@ -21,8 +15,6 @@
 #include "wpabuf.h"
 
 struct eap_sm;
-
-#define EAP_MAX_METHODS 8
 
 #define EAP_TTLS_AUTH_PAP 1
 #define EAP_TTLS_AUTH_CHAP 2
@@ -40,8 +32,11 @@ struct eap_user {
 			    * nt_password_hash() */
 	int phase2;
 	int force_version;
+	unsigned int remediation:1;
+	unsigned int macacl:1;
 	int ttls_auth; /* bitfield of
 			* EAP_TTLS_AUTH_{PAP,CHAP,MSCHAP,MSCHAPV2} */
+	struct hostapd_radius_attr *accept_attr;
 };
 
 struct eap_eapol_interface {
@@ -87,6 +82,7 @@ struct eapol_callbacks {
 	int (*get_eap_user)(void *ctx, const u8 *identity, size_t identity_len,
 			    int phase2, struct eap_user *user);
 	const char * (*get_eap_req_id_text)(void *ctx, size_t *len);
+	void (*log_msg)(void *ctx, const char *msg);
 };
 
 struct eap_config {
@@ -112,6 +108,13 @@ struct eap_config {
 	int fragment_size;
 
 	int pbc_in_m1;
+
+	const u8 *server_id;
+	size_t server_id_len;
+
+#ifdef CONFIG_TESTING_OPTIONS
+	u32 tls_test_flags;
+#endif /* CONFIG_TESTING_OPTIONS */
 };
 
 

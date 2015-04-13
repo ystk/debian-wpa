@@ -2,14 +2,8 @@
  * Wi-Fi Protected Setup - message definitions
  * Copyright (c) 2008, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef WPS_DEFS_H
@@ -19,15 +13,12 @@
 
 extern int wps_version_number;
 extern int wps_testing_dummy_cred;
+extern int wps_corrupt_pkhash;
 #define WPS_VERSION wps_version_number
 
 #else /* CONFIG_WPS_TESTING */
 
-#ifdef CONFIG_WPS2
 #define WPS_VERSION 0x20
-#else /* CONFIG_WPS2 */
-#define WPS_VERSION 0x10
-#endif /* CONFIG_WPS2 */
 
 #endif /* CONFIG_WPS_TESTING */
 
@@ -47,7 +38,7 @@ extern int wps_testing_dummy_cred;
 #define WPS_MGMTAUTHKEY_LEN 32
 #define WPS_MGMTENCKEY_LEN 16
 #define WPS_MGMT_KEY_ID_LEN 16
-#define WPS_OOB_DEVICE_PASSWORD_ATTR_LEN 54
+#define WPS_OOB_DEVICE_PASSWORD_MIN_LEN 16
 #define WPS_OOB_DEVICE_PASSWORD_LEN 32
 #define WPS_OOB_PUBKEY_HASH_LEN 20
 
@@ -151,7 +142,8 @@ enum {
 	WFA_ELEM_AUTHORIZEDMACS = 0x01,
 	WFA_ELEM_NETWORK_KEY_SHAREABLE = 0x02,
 	WFA_ELEM_REQUEST_TO_ENROLL = 0x03,
-	WFA_ELEM_SETTINGS_DELAY_TIME = 0x04
+	WFA_ELEM_SETTINGS_DELAY_TIME = 0x04,
+	WFA_ELEM_REGISTRAR_CONFIGURATION_METHODS = 0x05
 };
 
 /* Device Password ID */
@@ -161,7 +153,8 @@ enum wps_dev_password_id {
 	DEV_PW_MACHINE_SPECIFIED = 0x0002,
 	DEV_PW_REKEY = 0x0003,
 	DEV_PW_PUSHBUTTON = 0x0004,
-	DEV_PW_REGISTRAR_SPECIFIED = 0x0005
+	DEV_PW_REGISTRAR_SPECIFIED = 0x0005,
+	DEV_PW_NFC_CONNECTION_HANDOVER = 0x0007
 };
 
 /* Message Type */
@@ -186,7 +179,7 @@ enum wps_msg_type {
 /* Authentication Type Flags */
 #define WPS_AUTH_OPEN 0x0001
 #define WPS_AUTH_WPAPSK 0x0002
-#define WPS_AUTH_SHARED 0x0004
+#define WPS_AUTH_SHARED 0x0004 /* deprecated */
 #define WPS_AUTH_WPA 0x0008
 #define WPS_AUTH_WPA2 0x0010
 #define WPS_AUTH_WPA2PSK 0x0020
@@ -195,7 +188,7 @@ enum wps_msg_type {
 
 /* Encryption Type Flags */
 #define WPS_ENCR_NONE 0x0001
-#define WPS_ENCR_WEP 0x0002
+#define WPS_ENCR_WEP 0x0002 /* deprecated */
 #define WPS_ENCR_TKIP 0x0004
 #define WPS_ENCR_AES 0x0008
 #define WPS_ENCR_TYPES (WPS_ENCR_NONE | WPS_ENCR_WEP | WPS_ENCR_TKIP | \
@@ -221,7 +214,9 @@ enum wps_config_error {
 	WPS_CFG_SETUP_LOCKED = 15,
 	WPS_CFG_MSG_TIMEOUT = 16,
 	WPS_CFG_REG_SESS_TIMEOUT = 17,
-	WPS_CFG_DEV_PASSWORD_AUTH_FAILURE = 18
+	WPS_CFG_DEV_PASSWORD_AUTH_FAILURE = 18,
+	WPS_CFG_60G_CHAN_NOT_SUPPORTED = 19,
+	WPS_CFG_PUBLIC_KEY_HASH_MISMATCH = 20
 };
 
 /* Vendor specific Error Indication for WPS event messages */
@@ -229,6 +224,7 @@ enum wps_error_indication {
 	WPS_EI_NO_ERROR,
 	WPS_EI_SECURITY_TKIP_ONLY_PROHIBITED,
 	WPS_EI_SECURITY_WEP_PROHIBITED,
+	WPS_EI_AUTH_FAILURE,
 	NUM_WPS_EI_VALUES
 };
 
@@ -246,12 +242,10 @@ enum wps_error_indication {
 #define WPS_CONFIG_NFC_INTERFACE 0x0040
 #define WPS_CONFIG_PUSHBUTTON 0x0080
 #define WPS_CONFIG_KEYPAD 0x0100
-#ifdef CONFIG_WPS2
 #define WPS_CONFIG_VIRT_PUSHBUTTON 0x0280
 #define WPS_CONFIG_PHY_PUSHBUTTON 0x0480
 #define WPS_CONFIG_VIRT_DISPLAY 0x2008
 #define WPS_CONFIG_PHY_DISPLAY 0x4008
-#endif /* CONFIG_WPS2 */
 
 /* Connection Type Flags */
 #define WPS_CONN_ESS 0x01

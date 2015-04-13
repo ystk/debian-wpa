@@ -2,14 +2,8 @@
  * WPA Supplicant / dbus-based control interface
  * Copyright (c) 2006, Dan Williams <dcbw@redhat.com> and Red Hat, Inc.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -30,10 +24,6 @@
 #include "dbus_old.h"
 #include "dbus_old_handlers.h"
 #include "dbus_dict_helpers.h"
-
-extern int wpa_debug_level;
-extern int wpa_debug_show_keys;
-extern int wpa_debug_timestamp;
 
 /**
  * wpas_dbus_new_invalid_opts_error - Return a new invalid options error message
@@ -123,24 +113,28 @@ DBusMessage * wpas_dbus_global_add_interface(DBusMessage *message,
 				goto error;
 			if (!strcmp(entry.key, "driver") &&
 			    (entry.type == DBUS_TYPE_STRING)) {
+				os_free(driver);
 				driver = os_strdup(entry.str_value);
 				wpa_dbus_dict_entry_clear(&entry);
 				if (driver == NULL)
 					goto error;
 			} else if (!strcmp(entry.key, "driver-params") &&
 				   (entry.type == DBUS_TYPE_STRING)) {
+				os_free(driver_param);
 				driver_param = os_strdup(entry.str_value);
 				wpa_dbus_dict_entry_clear(&entry);
 				if (driver_param == NULL)
 					goto error;
 			} else if (!strcmp(entry.key, "config-file") &&
 				   (entry.type == DBUS_TYPE_STRING)) {
+				os_free(confname);
 				confname = os_strdup(entry.str_value);
 				wpa_dbus_dict_entry_clear(&entry);
 				if (confname == NULL)
 					goto error;
 			} else if (!strcmp(entry.key, "bridge-ifname") &&
 				   (entry.type == DBUS_TYPE_STRING)) {
+				os_free(bridge_ifname);
 				bridge_ifname = os_strdup(entry.str_value);
 				wpa_dbus_dict_entry_clear(&entry);
 				if (bridge_ifname == NULL)
@@ -229,7 +223,7 @@ DBusMessage * wpas_dbus_global_remove_interface(DBusMessage *message,
 		goto out;
 	}
 
-	if (!wpa_supplicant_remove_iface(global, wpa_s)) {
+	if (!wpa_supplicant_remove_iface(global, wpa_s, 0)) {
 		reply = wpas_dbus_new_success_reply(message);
 	} else {
 		reply = dbus_message_new_error(message,
@@ -337,7 +331,7 @@ DBusMessage * wpas_dbus_global_set_debugparams(DBusMessage *message,
 DBusMessage * wpas_dbus_iface_scan(DBusMessage *message,
 				   struct wpa_supplicant *wpa_s)
 {
-	wpa_s->scan_req = 2;
+	wpa_s->scan_req = MANUAL_SCAN_REQ;
 	wpa_supplicant_req_scan(wpa_s, 0, 0);
 	return wpas_dbus_new_success_reply(message);
 }
@@ -356,7 +350,7 @@ DBusMessage * wpas_dbus_iface_scan(DBusMessage *message,
 DBusMessage * wpas_dbus_iface_scan_results(DBusMessage *message,
 					   struct wpa_supplicant *wpa_s)
 {
-	DBusMessage *reply = NULL;
+	DBusMessage *reply;
 	DBusMessageIter iter;
 	DBusMessageIter sub_iter;
 	struct wpa_bss *bss;
@@ -364,9 +358,10 @@ DBusMessage * wpas_dbus_iface_scan_results(DBusMessage *message,
 	/* Create and initialize the return message */
 	reply = dbus_message_new_method_return(message);
 	dbus_message_iter_init_append(reply, &iter);
-	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY,
-					 DBUS_TYPE_OBJECT_PATH_AS_STRING,
-					 &sub_iter);
+	if (!dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY,
+					      DBUS_TYPE_OBJECT_PATH_AS_STRING,
+					      &sub_iter))
+		goto error;
 
 	/* Loop through scan results and append each result's object path */
 	dl_list_for_each(bss, &wpa_s->bss_id, struct wpa_bss, list_id) {
@@ -380,13 +375,21 @@ DBusMessage * wpas_dbus_iface_scan_results(DBusMessage *message,
 			    "%s/" WPAS_DBUS_BSSIDS_PART "/"
 			    WPAS_DBUS_BSSID_FORMAT,
 			    wpa_s->dbus_path, MAC2STR(bss->bssid));
-		dbus_message_iter_append_basic(&sub_iter,
-					       DBUS_TYPE_OBJECT_PATH, &path);
+		if (!dbus_message_iter_append_basic(&sub_iter,
+						    DBUS_TYPE_OBJECT_PATH,
+						    &path))
+			goto error;
 	}
 
-	dbus_message_iter_close_container(&iter, &sub_iter);
+	if (!dbus_message_iter_close_container(&iter, &sub_iter))
+		goto error;
 
 	return reply;
+
+error:
+	dbus_message_unref(reply);
+	return dbus_message_new_error(message, WPAS_ERROR_INTERNAL_ERROR,
+				      "an internal error occurred returning scan results");
 }
 
 
@@ -425,7 +428,7 @@ DBusMessage * wpas_dbus_bssid_properties(DBusMessage *message,
 		if (!wpa_dbus_dict_append_byte_array(&iter_dict, "ssid",
 						     (const char *) (ie + 2),
 						     ie[1]))
-		goto error;
+			goto error;
 	}
 
 	ie = wpa_bss_get_vendor_ie(bss, WPA_IE_VENDOR_TYPE);
@@ -545,7 +548,7 @@ DBusMessage * wpas_dbus_iface_capabilities(DBusMessage *message,
 			const char *args[] = {"CCMP", "TKIP", "NONE"};
 			if (!wpa_dbus_dict_append_string_array(
 				    &iter_dict, "pairwise", args,
-				    sizeof(args) / sizeof(char*)))
+				    ARRAY_SIZE(args)))
 				goto error;
 		}
 	} else {
@@ -588,7 +591,7 @@ DBusMessage * wpas_dbus_iface_capabilities(DBusMessage *message,
 			};
 			if (!wpa_dbus_dict_append_string_array(
 				    &iter_dict, "group", args,
-				    sizeof(args) / sizeof(char*)))
+				    ARRAY_SIZE(args)))
 				goto error;
 		}
 	} else {
@@ -638,7 +641,7 @@ DBusMessage * wpas_dbus_iface_capabilities(DBusMessage *message,
 			};
 			if (!wpa_dbus_dict_append_string_array(
 				    &iter_dict, "key_mgmt", args,
-				    sizeof(args) / sizeof(char*)))
+				    ARRAY_SIZE(args)))
 				goto error;
 		}
 	} else {
@@ -689,7 +692,7 @@ DBusMessage * wpas_dbus_iface_capabilities(DBusMessage *message,
 			const char *args[] = { "RSN", "WPA" };
 			if (!wpa_dbus_dict_append_string_array(
 				    &iter_dict, "proto", args,
-				    sizeof(args) / sizeof(char*)))
+				    ARRAY_SIZE(args)))
 				goto error;
 		}
 	} else {
@@ -726,7 +729,7 @@ DBusMessage * wpas_dbus_iface_capabilities(DBusMessage *message,
 			const char *args[] = { "OPEN", "SHARED", "LEAP" };
 			if (!wpa_dbus_dict_append_string_array(
 				    &iter_dict, "auth_alg", args,
-				    sizeof(args) / sizeof(char*)))
+				    ARRAY_SIZE(args)))
 				goto error;
 		}
 	} else {
@@ -1210,16 +1213,19 @@ DBusMessage * wpas_dbus_iface_set_smartcard_modules(
 			goto error;
 		if (!strcmp(entry.key, "opensc_engine_path") &&
 		    (entry.type == DBUS_TYPE_STRING)) {
+			os_free(opensc_engine_path);
 			opensc_engine_path = os_strdup(entry.str_value);
 			if (opensc_engine_path == NULL)
 				goto error;
 		} else if (!strcmp(entry.key, "pkcs11_engine_path") &&
 			   (entry.type == DBUS_TYPE_STRING)) {
+			os_free(pkcs11_engine_path);
 			pkcs11_engine_path = os_strdup(entry.str_value);
 			if (pkcs11_engine_path == NULL)
 				goto error;
 		} else if (!strcmp(entry.key, "pkcs11_module_path") &&
 				 (entry.type == DBUS_TYPE_STRING)) {
+			os_free(pkcs11_module_path);
 			pkcs11_module_path = os_strdup(entry.str_value);
 			if (pkcs11_module_path == NULL)
 				goto error;
@@ -1305,6 +1311,8 @@ DBusMessage * wpas_dbus_iface_get_scanning(DBusMessage *message,
 	return reply;
 }
 
+
+#ifndef CONFIG_NO_CONFIG_BLOBS
 
 /**
  * wpas_dbus_iface_set_blobs - Store named binary blobs (ie, for certificates)
@@ -1434,6 +1442,8 @@ DBusMessage * wpas_dbus_iface_remove_blobs(DBusMessage *message,
 
 	return wpas_dbus_new_success_reply(message);
 }
+
+#endif /* CONFIG_NO_CONFIG_BLOBS */
 
 
 /**

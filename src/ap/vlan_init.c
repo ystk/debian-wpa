@@ -4,14 +4,8 @@
  * Copyright 2005-2006, Devicescape Software, Inc.
  * Copyright (c) 2009, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "utils/includes.h"
@@ -21,6 +15,7 @@
 #include "ap_config.h"
 #include "ap_drv_ops.h"
 #include "vlan_init.h"
+#include "vlan_util.h"
 
 
 #ifdef CONFIG_FULL_DYNAMIC_VLAN
@@ -335,7 +330,9 @@ static int br_getnumports(const char *br_name)
 }
 
 
-static int vlan_rem(const char *if_name)
+#ifndef CONFIG_VLAN_NETLINK
+
+int vlan_rem(const char *if_name)
 {
 	int fd;
 	struct vlan_ioctl_args if_request;
@@ -378,7 +375,7 @@ static int vlan_rem(const char *if_name)
 	returns 1 if the interface already exists
 	returns 0 otherwise
 */
-static int vlan_add(const char *if_name, int vid)
+int vlan_add(const char *if_name, int vid, const char *vlan_if_name)
 {
 	int fd;
 	struct vlan_ioctl_args if_request;
@@ -474,6 +471,8 @@ static int vlan_set_name_type(unsigned int name_type)
 	return 0;
 }
 
+#endif /* CONFIG_VLAN_NETLINK */
+
 
 static void vlan_newlink(char *ifname, struct hostapd_data *hapd)
 {
@@ -481,14 +480,25 @@ static void vlan_newlink(char *ifname, struct hostapd_data *hapd)
 	char br_name[IFNAMSIZ];
 	struct hostapd_vlan *vlan = hapd->conf->vlan;
 	char *tagged_interface = hapd->conf->ssid.vlan_tagged_interface;
+	int vlan_naming = hapd->conf->ssid.vlan_naming;
 
 	wpa_printf(MSG_DEBUG, "VLAN: vlan_newlink(%s)", ifname);
 
 	while (vlan) {
 		if (os_strcmp(ifname, vlan->ifname) == 0) {
 
-			os_snprintf(br_name, sizeof(br_name), "brvlan%d",
-				    vlan->vlan_id);
+			if (hapd->conf->vlan_bridge[0]) {
+				os_snprintf(br_name, sizeof(br_name), "%s%d",
+					    hapd->conf->vlan_bridge,
+					    vlan->vlan_id);
+			} else if (tagged_interface) {
+				os_snprintf(br_name, sizeof(br_name),
+				            "br%s.%d", tagged_interface,
+					    vlan->vlan_id);
+			} else {
+				os_snprintf(br_name, sizeof(br_name),
+				            "brvlan%d", vlan->vlan_id);
+			}
 
 			if (!br_addbr(br_name))
 				vlan->clean |= DVLAN_CLEAN_BR;
@@ -496,12 +506,21 @@ static void vlan_newlink(char *ifname, struct hostapd_data *hapd)
 			ifconfig_up(br_name);
 
 			if (tagged_interface) {
+				if (vlan_naming ==
+				    DYNAMIC_VLAN_NAMING_WITH_DEVICE)
+					os_snprintf(vlan_ifname,
+						    sizeof(vlan_ifname),
+						    "%s.%d", tagged_interface,
+						    vlan->vlan_id);
+				else
+					os_snprintf(vlan_ifname,
+						    sizeof(vlan_ifname),
+						    "vlan%d", vlan->vlan_id);
 
-				if (!vlan_add(tagged_interface, vlan->vlan_id))
+				ifconfig_up(tagged_interface);
+				if (!vlan_add(tagged_interface, vlan->vlan_id,
+					      vlan_ifname))
 					vlan->clean |= DVLAN_CLEAN_VLAN;
-
-				os_snprintf(vlan_ifname, sizeof(vlan_ifname),
-					    "vlan%d", vlan->vlan_id);
 
 				if (!br_addif(br_name, vlan_ifname))
 					vlan->clean |= DVLAN_CLEAN_VLAN_PORT;
@@ -527,6 +546,7 @@ static void vlan_dellink(char *ifname, struct hostapd_data *hapd)
 	char br_name[IFNAMSIZ];
 	struct hostapd_vlan *first, *prev, *vlan = hapd->conf->vlan;
 	char *tagged_interface = hapd->conf->ssid.vlan_tagged_interface;
+	int vlan_naming = hapd->conf->ssid.vlan_naming;
 
 	wpa_printf(MSG_DEBUG, "VLAN: vlan_dellink(%s)", ifname);
 
@@ -534,15 +554,33 @@ static void vlan_dellink(char *ifname, struct hostapd_data *hapd)
 
 	while (vlan) {
 		if (os_strcmp(ifname, vlan->ifname) == 0) {
-			os_snprintf(br_name, sizeof(br_name), "brvlan%d",
-				    vlan->vlan_id);
+			if (hapd->conf->vlan_bridge[0]) {
+				os_snprintf(br_name, sizeof(br_name), "%s%d",
+					    hapd->conf->vlan_bridge,
+					    vlan->vlan_id);
+			} else if (tagged_interface) {
+				os_snprintf(br_name, sizeof(br_name),
+				            "br%s.%d", tagged_interface,
+					    vlan->vlan_id);
+			} else {
+				os_snprintf(br_name, sizeof(br_name),
+				            "brvlan%d", vlan->vlan_id);
+			}
 
 			if (vlan->clean & DVLAN_CLEAN_WLAN_PORT)
 				br_delif(br_name, vlan->ifname);
 
 			if (tagged_interface) {
-				os_snprintf(vlan_ifname, sizeof(vlan_ifname),
-					    "vlan%d", vlan->vlan_id);
+				if (vlan_naming ==
+				    DYNAMIC_VLAN_NAMING_WITH_DEVICE)
+					os_snprintf(vlan_ifname,
+						    sizeof(vlan_ifname),
+						    "%s.%d", tagged_interface,
+						    vlan->vlan_id);
+				else
+					os_snprintf(vlan_ifname,
+						    sizeof(vlan_ifname),
+						    "vlan%d", vlan->vlan_id);
 				if (vlan->clean & DVLAN_CLEAN_VLAN_PORT)
 					br_delif(br_name, vlan_ifname);
 				ifconfig_down(vlan_ifname);
@@ -682,7 +720,12 @@ full_dynamic_vlan_init(struct hostapd_data *hapd)
 	if (priv == NULL)
 		return NULL;
 
-	vlan_set_name_type(VLAN_NAME_TYPE_PLUS_VID_NO_PAD);
+#ifndef CONFIG_VLAN_NETLINK
+	vlan_set_name_type(hapd->conf->ssid.vlan_naming ==
+			   DYNAMIC_VLAN_NAMING_WITH_DEVICE ?
+			   VLAN_NAME_TYPE_RAW_PLUS_VID_NO_PAD :
+			   VLAN_NAME_TYPE_PLUS_VID_NO_PAD);
+#endif /* CONFIG_VLAN_NETLINK */
 
 	priv->s = socket(PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
 	if (priv->s < 0) {
@@ -808,6 +851,24 @@ int vlan_init(struct hostapd_data *hapd)
 	hapd->full_dynamic_vlan = full_dynamic_vlan_init(hapd);
 #endif /* CONFIG_FULL_DYNAMIC_VLAN */
 
+	if (hapd->conf->ssid.dynamic_vlan != DYNAMIC_VLAN_DISABLED &&
+	    !hapd->conf->vlan) {
+		/* dynamic vlans enabled but no (or empty) vlan_file given */
+		struct hostapd_vlan *vlan;
+		vlan = os_zalloc(sizeof(*vlan));
+		if (vlan == NULL) {
+			wpa_printf(MSG_ERROR, "Out of memory while assigning "
+				   "VLAN interfaces");
+			return -1;
+		}
+
+		vlan->vlan_id = VLAN_ID_WILDCARD;
+		os_snprintf(vlan->ifname, sizeof(vlan->ifname), "%s.#",
+			    hapd->conf->iface);
+		vlan->next = hapd->conf->vlan;
+		hapd->conf->vlan = vlan;
+	}
+
 	if (vlan_dynamic_add(hapd, hapd->conf->vlan))
 		return -1;
 
@@ -821,6 +882,7 @@ void vlan_deinit(struct hostapd_data *hapd)
 
 #ifdef CONFIG_FULL_DYNAMIC_VLAN
 	full_dynamic_vlan_deinit(hapd->full_dynamic_vlan);
+	hapd->full_dynamic_vlan = NULL;
 #endif /* CONFIG_FULL_DYNAMIC_VLAN */
 }
 

@@ -1,3 +1,68 @@
+wpa (2.3-1) unstable; urgency=medium
+
+  * New upstream release:
+    - fixed by the new upstream version:
+      + wpa: arbitrary command execution via action scripts (Closes: #765352).
+        wpasupplicant: fixed wpa_cli action script execution to use more
+        robust mechanism (CVE-2014-3686).
+        hostapd: fixed hostapd_cli action script execution to use more robust
+        mechanism (CVE-2014-3686).
+      + wpasupplicant: MAC addressing changing broken after updating to 2.2-1
+        (Closes: #763775).
+      + drop ap_config_c_fix-typo-for-capabilities, applied upstream.
+    - backport "Include ieee802_11_common.c in wpa_supplicant build
+      unconditionally" from HEAD, to fix a newly introduced FTBS on, at least,
+      kfreebsd.
+  * bump standards version to 3.9.6, no changes necessary.
+
+ -- Stefan Lippers-Hollmann <s.l-h@gmx.de>  Tue, 14 Oct 2014 21:29:37 +0200
+
+wpa (2.2-1) unstable; urgency=medium
+
+  * New upstream release:
+    - import suggested changes from Gerald Turner <gturner@unzane.com> (see
+      #718651 for details).
+      + disable ACS for hostapd on kfreebsd-any (FTBS).
+    - fixed by the new upstream version:
+      + wpa_supplicant: OpenSSL: tls_connection_handshake - Failed to read
+      (Closes: #561081).
+      + wpasupplicant: new upstream release 2.2 (Closes: #718651).
+      + wpasupplicant: -s option not documented in man page (Closes: #608135).
+    - refresh patches:
+      + drop 13_human_readable_signal.patch, applied upstream.
+      + drop hostapd_fix-WDS-VLAN-bridge-handling.patch, applied upstream.
+      + drop fix-spelling-s-algorith-algorithm.patch, applied upstream.
+    - adapt build configs for hostapd/ wpa_supplicant 2.2:
+      + sync with updated upstream defconfigs.
+      + keep Hotspot 2.0 support disabled for the time being.
+      + hostapd: keep sqlite3 support disabled for the time being.
+    - update debian/copyright manually, the wpa v2 branch was relicensed from
+      (BSD-3-clause || GPL-2) to BSD-3-clause only (for the most part). This
+      doesn't change the licensing state as the BSD-3-clause license is 
+      compatible with GPL-2.
+  * drop pre-wheezy /lib/init/rw/sendsigs.omit.d/ migration support, invert the
+    versioned initscripts dependency to a versioned breaks relation.
+  * migrate from /var/run/ to /run/.
+  * adapt get-orig-source for wpa 2.2.
+  * drop version qualifiers for libnl3 build dependencies, as they're
+    fullfilled by wheezy.
+  * drop version qualifiers for the lsb-base build dependency, as they're
+    fullfilled by squeeze.
+  * shorten short description for hostapd.
+  * sort debian/control entries.
+  * make lintian happy (invalid-short-name-in-dep5-copyright bsd) and call it
+    BSD-3-clause.
+  * enable DEBUG_SYSLOG and set DEBUG_SYSLOG_FACILITY=LOG_DAEMON, as requested
+    by Cyril Brulebois <kibi@debian.org> to improve logging options for d-i and
+    netcfg (Closes: #761922).
+  * fix various typos around "existence", thanks to A. Costa <agcosta@gis.net>,
+    (Closes: #683636).
+  * ap_config.c: fix typo for "capabilities".
+  * remove no longer required lintian override (spelling-error-in-binary for
+    the).
+
+ -- Stefan Lippers-Hollmann <s.l-h@gmx.de>  Wed, 17 Sep 2014 04:52:36 +0200
+
 wpa (1.1-1) unstable; urgency=medium
 
   * New upstream release:
@@ -1311,7 +1376,7 @@ wpasupplicant (0.5.4-3) unstable; urgency=low
   * Add a 5 second timeout loop to init_wpa_supplicant() that waits for the
     ctrl_interface socket to be established before allowing wpa_cli to launch,
     and avoid a race condition. This means other functions no longer need to
-    test for existance of the ctrl_interface socket. [ifupdown.sh]
+    test for existence of the ctrl_interface socket. [ifupdown.sh]
   * Rename WPA_DRIVER to WPA_SUP_DRIVER to conform with name scheme of other
     similar variables. [ifupdown.sh]
   * Add (untested) wpa-bridge support to ifupdown.sh. This is an experimental
@@ -1396,7 +1461,7 @@ wpasupplicant (0.5.4-2) unstable; urgency=low
     with Ubuntu. (lp#51351)
   * Update wpa_action.8 with the behaviour of wpa_action when IFSTATE_FILE or
     INTERFACES_FILE cannot be found, and the pathnames searched for their
-    existance.
+    existence.
   * Mention wpa_cli(8) in Custom Action Script section of README.Debian, as it
     contains information about environment variables available to the script
     at runtime.
@@ -1816,7 +1881,7 @@ wpasupplicant (0.4.7-3) unstable; urgency=low
 
   * Another brown paper bag release.
   * Fix mistype of $CONFIG_FILE variable name in default script. Also make
-    this the same variable checked for existance in the init script, as that
+    this the same variable checked for existence in the init script, as that
     was another bug I missed. (closes: #350900)
 
  -- Kyle McMartin <kyle@debian.org>  Wed, 01 Feb 2006 09:21:41 -0500

@@ -2,14 +2,8 @@
  * IEEE 802.1X-2004 Authenticator - EAPOL state machine
  * Copyright (c) 2002-2009, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef EAPOL_AUTH_SM_H
@@ -43,6 +37,8 @@ struct eapol_auth_config {
 	int fragment_size;
 	u16 pwd_group;
 	int pbc_in_m1;
+	const u8 *server_id;
+	size_t server_id_len;
 
 	/* Opaque context pointer to owner data for callback functions */
 	void *ctx;
@@ -64,7 +60,8 @@ struct eapol_auth_cb {
 			   size_t datalen);
 	void (*aaa_send)(void *ctx, void *sta_ctx, const u8 *data,
 			 size_t datalen);
-	void (*finished)(void *ctx, void *sta_ctx, int success, int preauth);
+	void (*finished)(void *ctx, void *sta_ctx, int success, int preauth,
+			 int remediation);
 	int (*get_eap_user)(void *ctx, const u8 *identity, size_t identity_len,
 			    int phase2, struct eap_user *user);
 	int (*sta_entry_alive)(void *ctx, const u8 *addr);
@@ -83,11 +80,12 @@ void eapol_auth_deinit(struct eapol_authenticator *eapol);
 struct eapol_state_machine *
 eapol_auth_alloc(struct eapol_authenticator *eapol, const u8 *addr,
 		 int flags, const struct wpabuf *assoc_wps_ie,
-		 const struct wpabuf *assoc_p2p_ie, void *sta_ctx);
+		 const struct wpabuf *assoc_p2p_ie, void *sta_ctx,
+		 const char *identity, const char *radius_cui);
 void eapol_auth_free(struct eapol_state_machine *sm);
 void eapol_auth_step(struct eapol_state_machine *sm);
-void eapol_auth_dump_state(FILE *f, const char *prefix,
-			   struct eapol_state_machine *sm);
+int eapol_auth_dump_state(struct eapol_state_machine *sm, char *buf,
+			  size_t buflen);
 int eapol_auth_eap_pending_cb(struct eapol_state_machine *sm, void *ctx);
 
 #endif /* EAPOL_AUTH_SM_H */

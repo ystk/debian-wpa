@@ -3,14 +3,8 @@
  * Copyright (c) 2006, Dan Williams <dcbw@redhat.com> and Red Hat, Inc.
  * Copyright (c) 2009, Witold Sowa <witold.sowa@gmail.com>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "utils/includes.h"
@@ -44,27 +38,25 @@ static dbus_bool_t fill_dict_with_properties(
 
 		if (!dbus_message_iter_open_container(dict_iter,
 						      DBUS_TYPE_DICT_ENTRY,
-						      NULL, &entry_iter)) {
-			dbus_set_error_const(error, DBUS_ERROR_NO_MEMORY,
-			                     "no memory");
-			return FALSE;
-		}
-		if (!dbus_message_iter_append_basic(&entry_iter,
+						      NULL, &entry_iter) ||
+		    !dbus_message_iter_append_basic(&entry_iter,
 						    DBUS_TYPE_STRING,
-						    &dsc->dbus_property)) {
-			dbus_set_error_const(error, DBUS_ERROR_NO_MEMORY,
-			                     "no memory");
-			return FALSE;
-		}
+						    &dsc->dbus_property))
+			goto error;
 
 		/* An error getting a property fails the request entirely */
 		if (!dsc->getter(&entry_iter, error, user_data))
 			return FALSE;
 
-		dbus_message_iter_close_container(dict_iter, &entry_iter);
+		if (!dbus_message_iter_close_container(dict_iter, &entry_iter))
+			goto error;
 	}
 
 	return TRUE;
+
+error:
+	dbus_set_error_const(error, DBUS_ERROR_NO_MEMORY, "no memory");
+	return FALSE;
 }
 
 
@@ -117,7 +109,12 @@ static DBusMessage * get_all_properties(DBusMessage *message, char *interface,
 		return reply;
 	}
 
-	wpa_dbus_dict_close_write(&iter, &dict_iter);
+	if (!wpa_dbus_dict_close_write(&iter, &dict_iter)) {
+		dbus_message_unref(reply);
+		return dbus_message_new_error(message, DBUS_ERROR_NO_MEMORY,
+					      "out of memory");
+	}
+
 	return reply;
 }
 
@@ -596,10 +593,10 @@ int wpa_dbus_unregister_object_per_iface(
 	if (!obj_desc) {
 		wpa_printf(MSG_ERROR, "dbus: %s: Could not obtain object's "
 			   "private data: %s", __func__, path);
-	} else {
-		eloop_cancel_timeout(flush_object_timeout_handler, con,
-				     obj_desc);
+		return 0;
 	}
+
+	eloop_cancel_timeout(flush_object_timeout_handler, con, obj_desc);
 
 	if (!dbus_connection_unregister_object_path(con, path))
 		return -1;
@@ -846,7 +843,6 @@ void wpa_dbus_flush_object_changed_properties(DBusConnection *con,
 		return;
 	eloop_cancel_timeout(flush_object_timeout_handler, con, obj_desc);
 
-	dsc = obj_desc->properties;
 	for (dsc = obj_desc->properties, i = 0; dsc && dsc->dbus_property;
 	     dsc++, i++) {
 		if (obj_desc->prop_changed_flags == NULL ||

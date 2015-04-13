@@ -2,14 +2,8 @@
  * WPA Supplicant - PeerKey for Direct Link Setup (DLS)
  * Copyright (c) 2006-2008, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef PEERKEY_H
@@ -30,7 +24,6 @@ struct wpa_peerkey {
 	int smk_complete;
 	u8 smkid[PMKID_LEN];
 	u32 lifetime;
-	os_time_t expiration;
 	int cipher; /* Selected cipher (WPA_CIPHER_*) */
 	u8 replay_counter[WPA_REPLAY_COUNTER_LEN];
 	int replay_counter_set;
@@ -48,7 +41,8 @@ int peerkey_verify_eapol_key_mic(struct wpa_sm *sm,
 				 struct wpa_eapol_key *key, u16 ver,
 				 const u8 *buf, size_t len);
 void peerkey_rx_eapol_4way(struct wpa_sm *sm, struct wpa_peerkey *peerkey,
-			   struct wpa_eapol_key *key, u16 key_info, u16 ver);
+			   struct wpa_eapol_key *key, u16 key_info, u16 ver,
+			   const u8 *key_data, size_t key_data_len);
 void peerkey_rx_eapol_smk(struct wpa_sm *sm, const u8 *src_addr,
 			  struct wpa_eapol_key *key, size_t extra_len,
 			  u16 key_info, u16 ver);
@@ -67,7 +61,8 @@ peerkey_verify_eapol_key_mic(struct wpa_sm *sm,
 
 static inline void
 peerkey_rx_eapol_4way(struct wpa_sm *sm, struct wpa_peerkey *peerkey,
-		      struct wpa_eapol_key *key, u16 key_info, u16 ver)
+		      struct wpa_eapol_key *key, u16 key_info, u16 ver,
+		      const u8 *key_data, size_t key_data_len)
 {
 }
 

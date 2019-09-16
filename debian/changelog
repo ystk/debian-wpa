@@ -1,3 +1,24 @@
+wpa (2.3-1+deb8u9) jessie-security; urgency=high
+
+  * Non-maintainer upload.
+  * Fix CVE-2019-16275:
+    hostapd (and wpa_supplicant when controlling AP mode) did not perform
+    sufficient source address validation for some received Management frames
+    and this could result in ending up sending a frame that caused associated
+    stations to incorrectly believe they were disconnected from the network
+    even if management frame protection (also known as PMF) was negotiated for
+    the association. This could be considered to be a denial of service
+    vulnerability since PMF is supposed to protect from this type of issues. It
+    should be noted that if PMF is not enabled, there would be no protocol
+    level protection against this type of denial service attacks.
+
+    An attacker in radio range of the access point could inject a specially
+    constructed unauthenticated IEEE 802.11 frame to the access point to cause
+    associated stations to be disconnected and require a reconnection to the
+    network.
+
+ -- Markus Koschany <apo@debian.org>  Sun, 15 Sep 2019 18:47:15 +0200
+
 wpa (2.3-1+deb8u8) jessie-security; urgency=medium
 
   * Non-maintainer upload by the LTS team.

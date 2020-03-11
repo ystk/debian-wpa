@@ -1,3 +1,14 @@
+wpa (2.3-1+deb8u10) jessie-security; urgency=high
+
+  * Non-maintainer upload by the LTS team.
+  * Fix CVE-2019-10064:
+    Similar to CVE-2016-10743 hostapd in EAP mode used a low quality
+    pseudorandom number generator that leads to insufficient entropy.
+    This was fixed by using the os_get_random function which provides
+    cryptographically strong pseudo random data.
+
+ -- Markus Koschany <apo@debian.org>  Tue, 10 Mar 2020 23:20:17 +0100
+
 wpa (2.3-1+deb8u9) jessie-security; urgency=high
 
   * Non-maintainer upload.

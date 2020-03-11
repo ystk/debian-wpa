@@ -58,3 +58,4 @@ CVE-2016-10743.patch
 2019-5/0003-EAP-pwd-peer-Fix-reassembly-buffer-handling.patch
 
 CVE-2019-16275.patch
+CVE-2019-10064.patch

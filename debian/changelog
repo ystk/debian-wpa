@@ -1,3 +1,14 @@
+wpa (2.3-1+deb8u11) jessie-security; urgency=high
+
+  * Non-maintainer upload by the LTS team.
+  * Add patch to fix CVE-2020-12695:
+    - WPS UPnP: Do not allow event subscriptions with URLs to other networks.
+    - For the other issues:
+      - WPS UPnP: Fix event message generation using a long URL path.
+      - WPS UPnP: Handle HTTP initiation failures for events more properly.
+
+ -- Utkarsh Gupta <utkarsh@debian.org>  Sat, 04 Jul 2020 10:37:22 +0530
+
 wpa (2.3-1+deb8u10) jessie-security; urgency=high
 
   * Non-maintainer upload by the LTS team.

@@ -1,3 +1,10 @@
+wpa (2.3-1+deb8u15) jessie-security; urgency=medium
+
+  * Non-maintainer upload by the ELTS Team.
+  * CVE-2024-5290: Only load libraries from trusted path
+
+ -- Adrian Bunk <bunk@debian.org>  Wed, 14 Aug 2024 19:37:54 +0300
+
 wpa (2.3-1+deb8u14) jessie-security; urgency=high
 
   * Non-maintainer upload by the ELTS Team.

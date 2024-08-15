@@ -48,3 +48,5 @@ CVE-2020-12695.patch
 CVE-2021-0326.patch
 CVE-2021-27803.patch
 CVE-2023-52160.patch
+0001-OpenSSL-Allow-pkcs11_module_path-to-be-NULL.patch
+CVE-2024-5290-lib_engine_trusted_path.patch

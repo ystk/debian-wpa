@@ -1,0 +1,43 @@
+From c109eb049c09a29e8714023678b1619bebd7b415 Mon Sep 17 00:00:00 2001
+From: David Woodhouse <dwmw2@infradead.org>
+Date: Thu, 18 Dec 2014 15:09:16 +0000
+Subject: OpenSSL: Allow pkcs11_module_path to be NULL
+
+New versions of engine_pkcs11 will automatically use the system's
+p11-kit-proxy.so to make the globally-configured PKCS#11 tokens available
+by default. So invoking the engine without an explicit module path is
+not an error.
+
+Older engines will fail but gracefully enough, so although it's still an
+error in that case there's no need for us to catch it for ourselves.
+
+Signed-off-by: David Woodhouse <David.Woodhouse@intel.com>
+---
+ src/crypto/tls_openssl.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/crypto/tls_openssl.c b/src/crypto/tls_openssl.c
+index e1534224c..40380cff3 100644
+--- a/src/crypto/tls_openssl.c
++++ b/src/crypto/tls_openssl.c
+@@ -700,12 +700,15 @@ static int tls_engine_load_dynamic_pkcs11(const char *pkcs11_so_path,
+ 		NULL, NULL
+ 	};
+ 
+-	if (!pkcs11_so_path || !pkcs11_module_path)
++	if (!pkcs11_so_path)
+ 		return 0;
+ 
+ 	pre_cmd[1] = pkcs11_so_path;
+ 	pre_cmd[3] = engine_id;
+-	post_cmd[1] = pkcs11_module_path;
++	if (pkcs11_module_path)
++		post_cmd[1] = pkcs11_module_path;
++	else
++		post_cmd[0] = NULL;
+ 
+ 	wpa_printf(MSG_DEBUG, "ENGINE: Loading pkcs11 Engine from %s",
+ 		   pkcs11_so_path);
+-- 
+2.30.2
+
